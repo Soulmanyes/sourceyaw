@@ -471,8 +471,10 @@ class FocusWatch:
 
     The input service sees every key and mouse movement on the desktop, so
     without this, scrolling in a browser while the game runs in the background
-    would count as jumping. Other desktops have no common way to ask, so there
-    the game counts as focused."""
+    would count as jumping. With follow_mouse = 2 the game keeps keyboard focus
+    while the wheel scrolls the window under the cursor, so the cursor must be
+    inside the game's window too. Other desktops have no common way to ask, so
+    there the game counts as focused."""
     INTERVAL = 0.25
 
     def __init__(self, process):
@@ -484,24 +486,31 @@ class FocusWatch:
         if self.path and os.path.exists(self.path):
             threading.Thread(target=self._watch, daemon=True).start()
 
-    def _active_pid(self):
+    def _ask(self, command):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
             s.settimeout(1)
             s.connect(self.path)
-            s.sendall(b"j/activewindow")
+            s.sendall(command)
             data = b""
             while chunk := s.recv(65536):
                 data += chunk
         import json
-        return (json.loads(data or b"{}") or {}).get("pid")
+        return json.loads(data or b"{}") or {}
+
+    def _check(self):
+        window = self._ask(b"j/activewindow")
+        with open(f"/proc/{window.get('pid')}/comm") as f:
+            if f.read().strip() != self.process:
+                return False
+        cursor = self._ask(b"j/cursorpos")
+        (x, y), (w, h) = window["at"], window["size"]
+        return x <= cursor["x"] < x + w and y <= cursor["y"] < y + h
 
     def _watch(self):
         while True:
             try:
-                pid = self._active_pid()
-                with open(f"/proc/{pid}/comm") as f:
-                    self.focused = f.read().strip() == self.process
-            except (OSError, ValueError, TypeError):
+                self.focused = self._check()
+            except (OSError, ValueError, TypeError, KeyError):
                 self.focused = False
             time.sleep(self.INTERVAL)
 

@@ -113,9 +113,9 @@ While a jump key is held, the trainer listens to your strafe keys, turn keys and
   them in the running game. An optional **Offset key** shows or hides the number in game
   with one press.
 
-It only counts while the game's window has focus (on Hyprland; other desktops can't be
-asked, so there it always counts) and while a map is loaded, so scrolling in the main menu
-or another window stays quiet.
+It only counts while the game's window has focus and the cursor is inside it (on Hyprland;
+other desktops can't be asked, so there it always counts) and while a map is loaded, so
+scrolling in the main menu or another window stays quiet.
 
 It reads your binds from the game's `config.cfg`, following aliases, so null binds and turn
 binds (`+left`/`+right`) work as they are. The tickrate is picked from the map (`surf_` maps
