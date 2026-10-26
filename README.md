@@ -41,7 +41,8 @@ install the dependencies yourself.
 curl -fsSL https://raw.githubusercontent.com/Soulmanyes/sourceyaw/main/install.sh | sh
 ```
 
-Or clone the repository and run `./install.sh` from it. Run the same command again to update.
+It installs the latest release. Or clone the repository and run `./install.sh` from it. Run the
+same command again to update, or let the app do it (see **Updates** below).
 
 Then:
 
@@ -90,6 +91,11 @@ before writing its own, and uninstalling puts it back.
 - **KROSSHAIR** (CS:S): if it isn't installed, **Install** downloads KROSSHAIR 0.2.5 (GPL-3.0,
   x86_64 only) from its GitHub releases into your user folder. No password is needed, and
   nothing is downloaded unless you press it.
+- **Updates:** once a day the app asks GitHub for the latest release. When there is a newer
+  one, a banner offers **Update**, which downloads it and runs its installer; restart the app
+  to use it. Turn on **Install updates automatically** to skip the banner. A copy running
+  from a git clone only tells you about the update. If a new release needs new system
+  packages, the update stops and asks you to run `install.sh` in a terminal.
 
 If the game is already running when you press Apply, run `exec yaws` in the console.
 
@@ -174,7 +180,7 @@ Settings and generated images are stored in `~/.config/sourceyaw`.
 
 [CC0 1.0](LICENSE). Public domain, do what you like. Source Yaw plays sounds straight from
 your own game install, and KROSSHAIR is only downloaded from its own releases if you ask for
-it.
+it. The only other connection it makes is the daily update check to GitHub.
 
 The one exception is the strafe trainer's overlay in [`overlay/`](overlay/): it is a fork
 of KROSSHAIR and stays under the [GPL-3.0](overlay/LICENSE), with the Vulkan headers it

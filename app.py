@@ -15,8 +15,10 @@ from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import yawcore as core  # noqa: E402
 import trainer  # noqa: E402
+import updater
 
 APP_ID = "io.github.soulmanyes.SourceYaw"
+REPO = "Soulmanyes/sourceyaw"
 
 # GDK key names -> Source bind names, for keys whose names differ
 GDK_TO_SOURCE = {
@@ -93,10 +95,13 @@ class _PlainBanner(Gtk.Revealer):
 
     def __init__(self):
         super().__init__()
-        self.label = Gtk.Label(wrap=True, margin_top=8, margin_bottom=8,
-                               margin_start=12, margin_end=12)
+        box = Gtk.Box(spacing=12, margin_top=8, margin_bottom=8, margin_start=12, margin_end=12)
+        self.label = Gtk.Label(wrap=True, hexpand=True)
         self.label.add_css_class("warning")
-        self.set_child(self.label)
+        box.append(self.label)
+        self.button = Gtk.Button(visible=False, valign=Gtk.Align.CENTER)
+        box.append(self.button)
+        self.set_child(box)
 
     def set_title(self, text):
         self.label.set_label(text)
@@ -110,6 +115,17 @@ class _PlainBanner(Gtk.Revealer):
 
 def make_banner():
     return Adw.Banner() if adw_at_least(3) else _PlainBanner()
+
+
+def banner_button(banner, label, on_click):
+    """A button at the end of a banner (Adw.Banner or _PlainBanner)."""
+    if isinstance(banner, _PlainBanner):
+        banner.button.set_label(label)
+        banner.button.set_visible(True)
+        banner.button.connect("clicked", lambda *_: on_click())
+    else:
+        banner.set_button_label(label)
+        banner.connect("button-clicked", lambda *_: on_click())
 
 
 if adw_at_least(4):
@@ -463,10 +479,12 @@ class Window(Adw.ApplicationWindow):
         self.apply_btn.connect("clicked", self.apply)
         header.pack_end(self.apply_btn)
         self.banner = make_banner()
+        self.update_banner = make_banner()
+        banner_button(self.update_banner, "Update", self.install_update)
 
         page = Adw.PreferencesPage()
         self.toasts.set_child(page)
-        self.set_content(toolbar_view([header, self.banner], self.toasts))
+        self.set_content(toolbar_view([header, self.banner, self.update_banner], self.toasts))
 
         game_group = Adw.PreferencesGroup(title="Game")
         if len(installed) > 1:
@@ -542,6 +560,7 @@ class Window(Adw.ApplicationWindow):
             self.add_krosshair_rows(cross)
         self.add_trainer_group(page)
         self.add_steam_group(page)
+        self.add_update_group(page)
 
         self.key = self.data["key"]
         self.key_text.set_label(self.key)
@@ -552,6 +571,7 @@ class Window(Adw.ApplicationWindow):
         self.rows[self.data["start"]].start.set_active(True)
         self.check_setup()
         self.set_dirty(False)
+        self.check_update()
 
     def add_krosshair_rows(self, cross):
         self.base_row = Adw.ComboRow(
@@ -592,6 +612,121 @@ class Window(Adw.ApplicationWindow):
         steam.add(self.launch_row)
         page.add(steam)
         self.show_launch_option()
+
+    # ------------------------------------------------------------ updates
+
+    def add_update_group(self, page):
+        self.updates = updater.Updater(REPO, core.VERSION, os.path.dirname(
+            os.path.realpath(__file__)), core.CONFIG_DIR / "updates.json")
+        self.latest = None       # a newer release, once the check finds one
+        self.installing = False
+        self.installed = False   # installed, by this window or an earlier one; a restart starts it
+        group = Adw.PreferencesGroup(title="Updates")
+        self.auto_update_row = SwitchRow(
+            title="Install updates automatically",
+            subtitle="Off: the app tells you about a new version and waits for you to "
+                     "press Update. Checks GitHub once a day")
+        self.auto_update_row.set_active(self.updates.auto)
+        self.auto_update_row.connect("notify::active", self.toggle_auto_update)
+        group.add(self.auto_update_row)
+        self.update_row = Adw.ActionRow(title=f"Version {core.VERSION}")
+        self.check_btn = Gtk.Button(label="Check now", valign=Gtk.Align.CENTER)
+        self.check_btn.connect("clicked", lambda *_: self.check_update(force=True))
+        self.update_row.add_suffix(self.check_btn)
+        self.restart_btn = Gtk.Button(label="Restart", valign=Gtk.Align.CENTER, visible=False)
+        self.restart_btn.add_css_class("suggested-action")
+        self.restart_btn.connect("clicked", lambda *_: self.restart())
+        self.update_row.add_suffix(self.restart_btn)
+        group.add(self.update_row)
+        page.add(group)
+
+    def toggle_auto_update(self, row, _):
+        self.updates.auto = row.get_active()
+        if self.updates.auto and self.latest and not self.updates.failed(self.latest):
+            self.install_update()
+
+    def show_installed(self, tag):
+        self.installed = True
+        self.update_banner.set_revealed(False)
+        self.update_row.set_subtitle(f"{tag} installed. Restart to use it")
+        self.check_btn.set_visible(False)
+        self.restart_btn.set_visible(True)
+
+    def check_update(self, force=False):
+        if self.installing or self.installed:
+            return
+        self.update_row.set_subtitle("Checking…")
+
+        def work():
+            try:
+                latest, error = self.updates.check(force), None
+            except (OSError, ValueError, KeyError) as e:  # offline, GitHub down, odd reply
+                latest, error = None, e
+            GLib.idle_add(found, latest, error)
+
+        def found(latest, error):
+            self.latest = latest
+            if error:
+                # only a check you asked for complains; the daily one stays quiet offline
+                self.update_row.set_subtitle("Couldn't reach GitHub" if force else "")
+            elif not latest:
+                self.update_row.set_subtitle("Up to date")
+            elif self.updates.installed(latest):
+                self.show_installed(latest["tag"])
+            else:
+                self.update_row.set_subtitle(f"{latest['tag']} is available")
+                if self.updates.auto and not self.updates.dev_checkout \
+                        and not self.updates.failed(latest):
+                    self.install_update()
+                else:
+                    self.update_banner.set_title(f"Source Yaw {latest['tag']} is available")
+                    self.update_banner.set_revealed(True)
+            return False
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def install_update(self):
+        if self.installing or self.installed or not self.latest:
+            return
+        if self.updates.dev_checkout:
+            self.toasts.add_toast(Adw.Toast(
+                title="Running from a git checkout: update it with git pull", timeout=5))
+            return
+        latest = self.latest
+        self.installing = True
+        self.update_banner.set_revealed(False)
+        self.update_row.set_subtitle(f"Installing {latest['tag']}…")
+
+        def work():
+            try:
+                self.updates.install(latest)
+                error = None
+            except (OSError, RuntimeError) as e:  # network, disk, installer: shown to the user
+                error = str(e)
+            GLib.idle_add(finished, error)
+
+        def finished(error):
+            self.installing = False
+            if error:
+                self.update_row.set_subtitle(f"Couldn't update: {error}")
+                self.toasts.add_toast(Adw.Toast(title=f"Couldn't update: {error}", timeout=6))
+                return False
+            self.show_installed(latest["tag"])
+            toast = Adw.Toast(title=f"Updated to {latest['tag']}. Restart to use it",
+                              button_label="Restart", timeout=0)
+            toast.connect("button-clicked", lambda *_: self.restart())
+            self.toasts.add_toast(toast)
+            return False
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def restart(self):
+        if self.dirty:
+            self.toasts.add_toast(Adw.Toast(title="Apply your changes before restarting",
+                                            timeout=3))
+            return
+        app = os.path.realpath(__file__)
+        os.execv(sys.executable, [sys.executable, app])
 
     # ------------------------------------------------------------ strafe trainer
 

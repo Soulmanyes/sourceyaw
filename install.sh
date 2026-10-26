@@ -29,7 +29,11 @@ if [ ! -f "$SRC/yawcore.py" ]; then
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT
     say "Downloading Source Yaw"
-    curl -fsSL https://github.com/Soulmanyes/sourceyaw/archive/refs/heads/main.tar.gz |
+    # the latest release; main if there is none yet. releases/latest redirects to .../tag/<tag>
+    tag=$(curl -fsSLo /dev/null -w '%{url_effective}' \
+        https://github.com/Soulmanyes/sourceyaw/releases/latest | sed -n 's|.*/tag/||p')
+    ref=${tag:+tags/$tag}
+    curl -fsSL "https://github.com/Soulmanyes/sourceyaw/archive/refs/${ref:-heads/main}.tar.gz" |
         tar -xz -C "$tmp" --strip-components=1
     sh "$tmp/install.sh" "$@" < /dev/tty
     exit
@@ -127,7 +131,7 @@ rm -rf "$APPS/$OLD_APP_ID.desktop" "$APPS/$OLD_NAME.desktop" "$ICONS/$OLD_APP_ID
 
 say "Installing the app to $DEST"
 mkdir -p "$DEST" "$APPS" "$BIN" "$ICONS"
-install -m 644 "$SRC/yawcore.py" "$SRC/trainer.py" "$DEST/"
+install -m 644 "$SRC/yawcore.py" "$SRC/trainer.py" "$SRC/updater.py" "$DEST/"
 # the input service's files; its installer (run with sudo) copies them to root-owned places
 mkdir -p "$DEST/inputd"
 install -m 644 "$SRC"/inputd/sourceyaw-inputd.* "$SRC/inputd/install-inputd.sh" "$DEST/inputd/"
