@@ -3,15 +3,19 @@
 *Formerly CS:S Yaw. If you had it installed, the installer moves your settings, and launch
 options that still say `css-yaw-run` keep working.*
 
-Cycle `cl_yawspeed` in Counter-Strike: Source or Momentum Mod with one key, and see which
-yawspeed is active from a sound and from your crosshair colour. Made for surf on Linux.
+A surf and bhop helper for Counter-Strike: Source and Momentum Mod on Linux. It cycles
+`cl_yawspeed` with one key and tells you which yawspeed is active, and it can train your
+strafes.
 
-- **Sound:** a short game sound plays when you switch, and only you hear it.
+- **Yawspeed cycle:** one key steps through your yawspeeds. A short game sound plays when
+  you switch, and only you hear it.
 - **Crosshair colour:** your crosshair changes colour for each yawspeed. In Momentum Mod
   that's the game's own crosshair. CS:S has no crosshair without a weapon, so there it's a
   [KROSSHAIR](https://github.com/noahlyk/krosshair) crosshair.
 - **Strafe trainer** (optional): a tone while you turn without the matching strafe key, and
-  each strafe's offset in ticks on screen. See [Strafe trainer](#strafe-trainer).
+  each strafe's offset in ticks on screen, with a key to show or hide it. See
+  [Strafe trainer](#strafe-trainer).
+- **Updates:** the app checks GitHub for new releases and installs them for you.
 
 https://github.com/user-attachments/assets/40f99c9d-ba8a-4a52-8c9c-d5cf06575f16
 
